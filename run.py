@@ -19,10 +19,12 @@ def get_kst():
 
 def log_to_readme(message):
     try:
-        with open("README.md", "a", encoding="utf-8") as f:
+        # README.md 대신 attendance.log 파일을 사용합니다.
+        with open("attendance.log", "a", encoding="utf-8") as f:
             f.write(f"- {get_kst()} | {message}\n")
+        print(f"📝 로그 기록 완료: {message}")
     except Exception as e:
-        print(f"Log Error: {e}")
+        print(f"📝 로그 기록 실패: {e}")
 
 options = Options()
 options.add_argument("--headless")
