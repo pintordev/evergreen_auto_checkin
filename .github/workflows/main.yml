@@ -2,8 +2,9 @@ name: Evergreen Auto Checkin
 
 on:
   schedule:
-    - cron: '10 0 * * *' # 매일 한국시간 오전 9시 10분
-  workflow_dispatch: # 수동 실행 버튼 활성화
+    # 한국 시간(KST) 오전 00:05는 UTC 기준 15:05입니다.
+    - cron: '5 15 * * *'
+  workflow_dispatch:
 
 jobs:
   build:
