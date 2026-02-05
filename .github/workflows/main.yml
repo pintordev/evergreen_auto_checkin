@@ -43,11 +43,9 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          # README.md만 추가
           git add README.md
-          
-          # 변경사항이 있으면 커밋
           git commit -m "📝 출석 기록 업데이트" || echo "No changes"
           
-          # 안전하게 푸시
-          git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
+          # 원격과 충돌 날 수 있으니 안전하게 force-with-lease 사용
+          git push --force-with-lease https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
+
