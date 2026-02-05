@@ -36,14 +36,14 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          # 1. 서버의 최신 상태를 가져오고 현재 변경사항과 합칩니다.
-          git pull origin main --rebase
+          # attendance.log 파일만 추가합니다.
+          git add attendance.log
           
-          # 2. README.md 파일만 스테이징합니다. (설정 파일은 절대 건드리지 않음)
-          git add README.md
-          
-          # 3. 변경사항이 있을 때만 커밋합니다.
-          git commit -m "📝 출석 기록 업데이트" || echo "No changes to commit"
-          
-          # 4. 푸시합니다. (--force를 빼서 보안 검사를 통과합니다)
-          git push origin main
+          # 변경사항이 있을 때만 커밋하고 푸시합니다.
+          if git diff --staged --quiet; then
+            echo "변경사항 없음"
+          else
+            git commit -m "📝 출석 기록 업데이트"
+            # 특정 파일만 지정해서 푸시하여 설정을 건드리지 않음을 증명합니다.
+            git push origin main
+          fi
