@@ -33,14 +33,15 @@ jobs:
 
       - name: Commit and Push changes
         env:
-          # 아까 등록한 시크릿 토큰을 사용합니다.
-          GH_PAT: ${{ secrets.GH_PAT }}
+          # Settings > Secrets에 등록한 그 이름 그대로여야 합니다.
+          MY_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
           git add README.md
-          git commit -m "📝 출석 기록 업데이트" || echo "No changes"
+          git commit -m "📝 출석 기록 업데이트" || echo "No changes to commit"
           
-          # 기본 GITHUB_TOKEN 대신 우리가 만든 GH_PAT를 주소에 넣어 푸시합니다.
-          git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git main --force
+          # [핵심] 주소에 직접 토큰을 넣어서 권한을 증명합니다.
+          # 아래 주소 형식은 깃허브가 권한 에러를 낼 때 쓰는 무적의 치트키입니다.
+          git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main --force
