@@ -71,7 +71,7 @@ try:
         log_to_readme("ℹ️ 출석 버튼을 찾을 수 없음")
 
 except Exception as e:
-    # 72번 줄 에러 수정: 괄호와 따옴표를 정확히 닫았습니다.
+    # 에러 메시지를 30자까지만 자르고 괄호와 따옴표를 정확히 닫음
     error_summary = str(e)[:30]
     log_to_readme(f"🚨 시스템 에러: {error_summary}")
     print(f"❌ 상세 에러: {e}")
