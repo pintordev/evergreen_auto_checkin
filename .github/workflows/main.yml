@@ -2,8 +2,7 @@ name: Evergreen Auto Checkin
 
 on:
   schedule:
-    # 한국 시간(KST) 오전 00:05는 UTC 기준 15:05입니다.
-    - cron: '5 15 * * *'
+    - cron: '5 15 * * *' # 한국 시간 오전 12시 05분 (UTC 15:05)
   workflow_dispatch:
 
 jobs:
@@ -17,32 +16,9 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Install dependencies
-        run: pip install selenium webdriver-manager
-
-      - name: Run script
-        env:
-          USER_ID: ${{ secrets.USER_ID }}
-          USER_PW: ${{ secrets.USER_PW }}
-        run: python run.py
-
-      - name: Commit and Push changes
-        env:
-          # Settings > Secrets에 등록한 그 이름 그대로여야 합니다.
-          MY_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          
-          git add README.md
-          git commit -m "📝 출석 기록 업데이트" || echo "No changes to commit"
-          
-          # [핵심] 주소에 직접 토큰을 넣어서 권한을 증명합니다.
-          # 아래 주소 형식은 깃허브가 권한 에러를 낼 때 쓰는 무적의 치트키입니다.
-          git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main --force
