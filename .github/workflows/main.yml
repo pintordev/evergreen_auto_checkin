@@ -2,56 +2,56 @@ name: Evergreen Auto Checkin
 
 on:
   schedule:
-    - cron: '30 3 * * *' # 한국 시간 오전 12시 30분
+    - cron: '30 3 * * *' # 한국 시간 12:30 (UTC 03:30)
   workflow_dispatch:
 
 jobs:
-  build:
+  checkin:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # README.md push만 필요
 
     steps:
+      # 1. 코드 체크아웃
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
 
+      # 2. Python 환경 세팅
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # 3. 필요한 패키지 설치
       - name: Install dependencies
         run: pip install selenium webdriver-manager
 
-      - name: Run script
+      # 4. 자동 체크인 실행
+      - name: Run attendance script
         env:
           USER_ID: ${{ secrets.USER_ID }}
           USER_PW: ${{ secrets.USER_PW }}
         run: python run.py
 
+      # 5. README.md 커밋 & 푸시 (워크플로우 제외 + push 오류 방지)
       - name: Commit and Push README updates
         env:
           MY_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-      
-          # README.md만 커밋, 워크플로우 파일 제외
+
+          # 1. 원격 main 최신 상태 가져오기
+          git fetch --all
+
+          # 2. 로컬 main 완전히 원격 main으로 동기화
+          git reset --hard origin/main
+
+          # 3. README.md만 추가 & 커밋
           git add README.md ':!./.github/workflows/*'
           git commit -m "📝 출석 기록 업데이트" || echo "No changes"
-      
-          # 1. 원격 main 최신 가져오기
-          git fetch origin main
-      
-          # 2. 로컬 main 강제 동기화
-          git reset --hard origin/main
-      
-          # 3. README.md 커밋 다시 적용
-          git add README.md
-          git commit -m "📝 출석 기록 업데이트" || echo "No changes"
-      
+
           # 4. 강제 푸시
           git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main --force
-
