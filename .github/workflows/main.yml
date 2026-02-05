@@ -31,16 +31,30 @@ jobs:
           USER_PW: ${{ secrets.USER_PW }}
         run: python run.py
 
-      - name: Commit and Push changes
+      - name: Commit and Push README updates
         env:
           MY_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
-          
-          # 설정 파일(.github/)은 제외하고 README.md 등만 커밋
-          git add . ':!./.github/workflows/*'
+
+          # README.md만 커밋, 워크플로우 제외
+          git add README.md ':!./.github/workflows/*'
           git commit -m "📝 출석 기록 업데이트" || echo "No changes"
+
+          # 1. 원격 main 최신 가져오기
+          git fetch origin main
+
+          # 2. 로컬 브랜치 강제 동기화
+          git reset --hard origin/main
+
+          # 3. 커밋 적용
+          git add README.md
+          git commit -m "📝 출석 기록 업데이트" || echo "No changes"
+
+          # 4. 안전하게 푸시
+          git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main --force
+
           
           # 원격 main 최신 상태로 동기화 후 안전하게 푸시
           git fetch origin main
