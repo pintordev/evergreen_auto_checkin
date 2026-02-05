@@ -42,5 +42,7 @@ jobs:
           git add . ':!./.github/workflows/*'
           git commit -m "📝 출석 기록 업데이트" || echo "No changes"
           
-          # PAT 토큰을 사용하여 안전하게 푸시
+          # 원격 main 최신 상태로 동기화 후 안전하게 푸시
+          git fetch origin main
+          git reset --soft origin/main
           git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
