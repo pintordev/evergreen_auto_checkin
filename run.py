@@ -69,10 +69,11 @@ try:
         log_to_readme("ℹ️ 출석 버튼 없음 (이미 완료되었거나 페이지 오류)")
 
 except Exception as e:
-    # 에러 메시지를 안전하게 자르고 괄호를 정확히 닫았습니다.
+    # 에러 메시지를 변수에 먼저 담아서 안전하게 처리했습니다.
     error_msg = str(e)[:30]
     log_to_readme(f"🚨 시스템 에러: {error_msg}")
     print(f"❌ 에러 발생: {e}")
 finally:
+    # 드라이버가 존재할 때만 종료하도록 안전하게 설정
     if 'driver' in locals():
         driver.quit()
