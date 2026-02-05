@@ -43,7 +43,7 @@ wait = WebDriverWait(driver, 20)
 try:
     print(f"📅 실행 시작: {get_kst()}")
     driver.get("https://evergreenjb.me/")
-    time.sleep(3)  # 페이지 초기 로딩 대기
+    time.sleep(3)
 
     # 로그인
     try:
@@ -55,7 +55,6 @@ try:
         pw_input.send_keys(Keys.ENTER)
         time.sleep(5)
 
-        # 로그인 성공 확인
         if "로그아웃" not in driver.page_source:
             log_to_readme("🚨 로그인 실패")
             print("❌ 로그인 실패")
