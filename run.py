@@ -15,13 +15,13 @@ USER_ID = os.environ.get('USER_ID')
 USER_PW = os.environ.get('USER_PW')
 
 def get_kst():
-    # KST 시간 생성
+    # 한국 시간(KST) 생성
     return (datetime.datetime.now() + datetime.timedelta(hours=9)).strftime('%Y-%m-%d %H:%M:%S')
 
 def log_to_readme(message):
     try:
         with open("README.md", "a", encoding="utf-8") as f:
-            # 아이디 노출 없이 시간과 결과만 한 줄씩 기록
+            # 아이디 노출 없이 시간과 결과만 기록
             f.write(f"- {get_kst()} | {message}\n")
         print(f"📝 로그 기록 완료: {message}")
     except Exception as e:
@@ -61,20 +61,20 @@ try:
     time.sleep(5)
 
     try:
-        # '출석'이라는 텍스트가 포함된 모든 요소를 찾아 클릭 시도
+        # '출석' 텍스트를 포함한 버튼 클릭
         att_btn = driver.find_element(By.XPATH, "//*[contains(text(), '출석')]")
         driver.execute_script("arguments[0].click();", att_btn)
         time.sleep(2)
-        # 혹시 모를 확인 팝업 엔터 처리
         driver.switch_to.active_element.send_keys(Keys.ENTER)
         log_to_readme("✅ 출석 체크 성공")
     except:
-        log_to_readme("ℹ️ 출석 버튼을 찾을 수 없음 (이미 완료 가능성)")
+        log_to_readme("ℹ️ 출석 버튼을 찾을 수 없음")
 
 except Exception as e:
-    # 에러 발생 시 로그에 기록 (문법 오류 수정됨)
-    err_msg = str(e)[:30]
-    log_to_readme(f"🚨 시스템 에러: {err_msg}")
+    # 72번 줄 에러 수정: 괄호와 따옴표를 정확히 닫았습니다.
+    error_summary = str(e)[:30]
+    log_to_readme(f"🚨 시스템 에러: {error_summary}")
+    print(f"❌ 상세 에러: {e}")
 finally:
     if 'driver' in locals():
         driver.quit()
