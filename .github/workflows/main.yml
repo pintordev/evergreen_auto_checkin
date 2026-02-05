@@ -2,50 +2,45 @@ name: Evergreen Auto Checkin
 
 on:
   schedule:
-    - cron: '30 3 * * *' # UTC 기준, 한국 시간(KST) 12:30
+    - cron: '30 3 * * *' # 한국 시간 오전 12시 30분
   workflow_dispatch:
 
 jobs:
-  checkin:
+  build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # README.md 커밋만 하므로 workflow 권한 불필요
+      contents: write
 
     steps:
-      # 1. 코드 체크아웃
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT }}  # PAT 사용
+          token: ${{ secrets.GH_PAT }}
 
-      # 2. Python 환경 세팅
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      # 3. 필요 패키지 설치
       - name: Install dependencies
         run: pip install selenium webdriver-manager
 
-      # 4. 출석 스크립트 실행
-      - name: Run attendance script
+      - name: Run script
         env:
           USER_ID: ${{ secrets.USER_ID }}
           USER_PW: ${{ secrets.USER_PW }}
         run: python run.py
 
-      # 5. README.md 커밋 & 푸시
-      - name: Commit and Push README updates
+      - name: Commit and Push changes
         env:
           MY_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          git add README.md
+          # 설정 파일(.github/)은 제외하고 README.md 등만 커밋
+          git add . ':!./.github/workflows/*'
           git commit -m "📝 출석 기록 업데이트" || echo "No changes"
           
-          # 원격과 충돌 날 수 있으니 안전하게 force-with-lease 사용
-          git push --force-with-lease https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
-
+          # PAT 토큰을 사용하여 안전하게 푸시
+          git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
