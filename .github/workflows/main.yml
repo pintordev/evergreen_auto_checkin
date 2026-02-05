@@ -2,45 +2,52 @@ name: Evergreen Auto Checkin
 
 on:
   schedule:
-    - cron: '5 15 * * *' # 한국 시간 오전 12시 05분 (UTC 15:05)
+    - cron: '30 3 * * *' # UTC 기준, 한국 시간(KST) 12:30
   workflow_dispatch:
 
 jobs:
-  build:
+  checkin:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # workflow 권한 필요 없음
+      contents: write  # README.md 커밋만 하므로 workflow 권한 불필요
 
     steps:
+      # 1. 코드 체크아웃
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GH_PAT }}  # PAT 사용
 
+      # 2. Python 환경 세팅
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
+      # 3. 필요 패키지 설치
       - name: Install dependencies
         run: pip install selenium webdriver-manager
 
-      - name: Run script
+      # 4. 출석 스크립트 실행
+      - name: Run attendance script
         env:
           USER_ID: ${{ secrets.USER_ID }}
           USER_PW: ${{ secrets.USER_PW }}
         run: python run.py
 
-      - name: Commit and Push changes
+      # 5. README.md 커밋 & 푸시
+      - name: Commit and Push README updates
         env:
           MY_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          # 변경된 모든 파일 커밋 (워크플로우 파일 제외)
-          git add . ':!./.github/workflows/*'
+          # README.md만 추가
+          git add README.md
+          
+          # 변경사항이 있으면 커밋
           git commit -m "📝 출석 기록 업데이트" || echo "No changes"
           
+          # 안전하게 푸시
           git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
-
