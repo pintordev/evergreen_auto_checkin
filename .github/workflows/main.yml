@@ -32,18 +32,15 @@ jobs:
         run: python run.py
 
       - name: Commit and Push changes
+        env:
+          # 아까 등록한 시크릿 토큰을 사용합니다.
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          # attendance.log 파일만 추가합니다.
-          git add attendance.log
+          git add README.md
+          git commit -m "📝 출석 기록 업데이트" || echo "No changes"
           
-          # 변경사항이 있을 때만 커밋하고 푸시합니다.
-          if git diff --staged --quiet; then
-            echo "변경사항 없음"
-          else
-            git commit -m "📝 출석 기록 업데이트"
-            # 특정 파일만 지정해서 푸시하여 설정을 건드리지 않음을 증명합니다.
-            git push origin main
-          fi
+          # 기본 GITHUB_TOKEN 대신 우리가 만든 GH_PAT를 주소에 넣어 푸시합니다.
+          git push https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git main --force
