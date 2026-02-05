@@ -22,3 +22,27 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install selenium webdriver-manager
+
+      - name: Run script
+        env:
+          USER_ID: ${{ secrets.USER_ID }}
+          USER_PW: ${{ secrets.USER_PW }}
+        run: python run.py
+
+      - name: Commit and Push changes
+        env:
+          MY_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+          # 워크플로우 파일 제외하고 변경된 파일만 add
+          git add README.md || echo "No files to add"
+          
+          git commit -m "📝 출석 기록 업데이트" || echo "No changes"
+          
+          # 토큰 포함 푸시
+          git push https://x-access-token:${MY_TOKEN}@github.com/${{ github.repository }}.git main
