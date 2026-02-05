@@ -36,15 +36,14 @@ jobs:
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
           
-          # 1. 원격 저장소의 최신 상태를 가져옵니다.
-          git fetch origin main
+          # 1. 서버의 최신 상태를 가져오고 현재 변경사항과 합칩니다.
+          git pull origin main --rebase
           
-          # 2. 오직 README.md 파일만 서버의 최신 버전으로 맞춥니다.
-          git checkout origin/main -- README.md || echo "신규 파일임"
-          
-          # 3. 변경사항을 반영합니다.
+          # 2. README.md 파일만 스테이징합니다. (설정 파일은 절대 건드리지 않음)
           git add README.md
-          git commit -m "📝 출석 기록 업데이트" || echo "변경사항 없음"
           
-          # 4. README.md만 골라서 업데이트합니다.
+          # 3. 변경사항이 있을 때만 커밋합니다.
+          git commit -m "📝 출석 기록 업데이트" || echo "No changes to commit"
+          
+          # 4. 푸시합니다. (--force를 빼서 보안 검사를 통과합니다)
           git push origin main
