@@ -2,34 +2,34 @@ name: Evergreen Auto Checkin
 
 on:
   schedule:
-    - cron: '30 3 * * *' # 한국 시간 12:30 (UTC 03:30)
-  workflow_dispatch:
+    # ✅ 한국(KST) 00:30 실행
+    # GitHub Actions는 UTC 기준 → 15:30 UTC = 00:30 KST
+    - cron: '30 15 * * *'
 
 jobs:
   checkin:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 코드 체크아웃
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      # 2. Python 환경 세팅
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
-      # 3. 필요한 패키지 설치
       - name: Install dependencies
-        run: pip install selenium webdriver-manager requests
+        run: |
+          pip install selenium webdriver-manager
 
-      # 4. 자동 체크인 + README 업데이트
-      - name: Run attendance script
-        env:
-          USER_ID: ${{ secrets.USER_ID }}
-          USER_PW: ${{ secrets.USER_PW }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+      - name: Run check-in bot
         run: python run.py
+
+      - name: Commit README update
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          git add README.md
+          git commit -m "📝 출석 기록 업데이트" || echo "No changes"
+          git push
