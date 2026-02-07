@@ -1,301 +1,358 @@
-import json
+# attendance_bot.py
+# 사용법(로컬):
+# export EVERGREEN_ID="polomolo"
+# export EVERGREEN_PW="atmu7510"
+# python attendance_bot.py
+#
+# (Windows PowerShell)
+#   $env:EVERGREEN_ID="아이디"
+#   $env:EVERGREEN_PW="비번"
+#   python .\attendance_bot.py
+
 import os
-import re
 import sys
 import time
-from dataclasses import dataclass
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import datetime
+import logging
+from pathlib import Path
 
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
 
 
-KST = ZoneInfo("Asia/Seoul")
+ATTENDANCE_URL = "https://evergreenjb.me/attendance"
 
 
-@dataclass
-class Result:
-    result: str  # success | already | failed
-    points: int | None = None
-    message: str | None = None
+# ----------------------------
+# logging / debug helpers
+# ----------------------------
+def setup_logger() -> logging.Logger:
+    Path("logs").mkdir(exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_path = Path("logs") / f"run_{ts}.log"
+
+    logger = logging.getLogger("evergreen")
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setFormatter(fmt)
+    fh = logging.FileHandler(log_path, encoding="utf-8")
+    fh.setFormatter(fmt)
+
+    logger.addHandler(sh)
+    logger.addHandler(fh)
+
+    logger.info(f"[LOG] write to {log_path}")
+    return logger
 
 
-def _now_kst() -> datetime:
-    return datetime.now(tz=KST)
+def save_debug(driver: webdriver.Chrome, logger: logging.Logger, reason: str) -> None:
+    Path("debug").mkdir(exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = Path("debug") / f"{ts}_{reason}"
+
+    try:
+        png = f"{base}.png"
+        html = f"{base}.html"
+        driver.save_screenshot(png)
+        Path(html).write_text(driver.page_source, encoding="utf-8")
+        logger.error(f"[DEBUG] saved: {png}")
+        logger.error(f"[DEBUG] saved: {html}")
+    except Exception as e:
+        logger.error(f"[DEBUG] save failed: {type(e).__name__}: {e}")
 
 
-def _ensure_dir(path: str) -> None:
-    os.makedirs(path, exist_ok=True)
+# ----------------------------
+# core utils
+# ----------------------------
+def kst_today_label() -> str:
+    return f"{datetime.datetime.now().day}일"
 
 
-def _write_text(path: str, text: str) -> None:
-    _ensure_dir(os.path.dirname(path) or ".")
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+def build_driver(headless: bool = False) -> webdriver.Chrome:
+    opts = ChromeOptions()
+    if headless:
+        opts.add_argument("--headless=new")
 
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--window-size=1280,900")
 
-def _append_text(path: str, text: str) -> None:
-    _ensure_dir(os.path.dirname(path) or ".")
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(text)
+    # 자동화 탐지 완화(필수 아님)
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.add_experimental_option("useAutomationExtension", False)
 
-
-def _update_readme_latest(line: str) -> None:
-    readme_path = "README.md"
-    if not os.path.exists(readme_path):
-        return
-
-    with open(readme_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    start = "<!-- CHECKIN_STATUS_START -->"
-    end = "<!-- CHECKIN_STATUS_END -->"
-    if start not in content or end not in content:
-        return
-
-    pattern = re.compile(re.escape(start) + r".*?" + re.escape(end), re.DOTALL)
-    repl = f"{start}\n- {line}\n{end}"
-    new_content = pattern.sub(repl, content, count=1)
-    if new_content != content:
-        with open(readme_path, "w", encoding="utf-8") as f:
-            f.write(new_content)
-
-
-def _setup_driver() -> webdriver.Chrome:
-    options = Options()
-    if os.getenv("HEADLESS", "1") == "1":
-        options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1400,900")
-
-    # If GitHub Actions provides CHROMEDRIVER_PATH, prefer it.
-    chromedriver_path = os.getenv("CHROMEDRIVER_PATH")
-    if chromedriver_path and os.path.exists(chromedriver_path):
-        service = Service(executable_path=chromedriver_path)
-    else:
-        service = Service()  # Selenium Manager fallback
-
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.set_page_load_timeout(int(os.getenv("PAGELOAD_TIMEOUT", "45")))
+    driver = webdriver.Chrome(options=opts)
+    driver.set_page_load_timeout(40)
     return driver
 
 
-def _dump_debug(driver: webdriver.Chrome, tag: str) -> None:
-    out_dir = os.getenv("ARTIFACT_DIR", "artifacts")
-    _ensure_dir(out_dir)
+def page_is_403(driver) -> bool:
+    src = (driver.page_source or "").lower()
+    title = (driver.title or "").lower()
+    return ("403 forbidden" in src) or ("403 forbidden" in title)
 
-    # meta
-    meta = {
-        "tag": tag,
-        "ts_kst": _now_kst().isoformat(),
-        "url": getattr(driver, "current_url", None),
-        "title": getattr(driver, "title", None),
-    }
-    _write_text(os.path.join(out_dir, f"meta_{tag}.json"), json.dumps(meta, ensure_ascii=False, indent=2))
 
-    # page html
-    try:
-        _write_text(os.path.join(out_dir, f"page_{tag}.html"), driver.page_source)
-    except Exception:
-        pass
+def safe_get(driver, logger: logging.Logger, url: str) -> None:
+    logger.info(f"[GET] {url}")
+    driver.get(url)
+    time.sleep(0.3)
+    if page_is_403(driver):
+        raise RuntimeError(f"403_forbidden ({url})")
 
-    # screenshot
-    try:
-        driver.save_screenshot(os.path.join(out_dir, f"shot_{tag}.png"))
-    except Exception:
-        pass
 
-    # key nodes (best-effort)
-    def outer_html(selector: tuple[str, str]) -> str | None:
+# ----------------------------
+# login detection / login flow
+# ----------------------------
+def find_login_button(driver):
+    # 네가 준 버튼:
+    # <a class="bt-login slbt slbt--rect" onclick="slPop('sl-login')">로그인</a>
+    cands = driver.find_elements(By.CSS_SELECTOR, "a.bt-login")
+    for a in cands:
         try:
-            el = driver.find_element(*selector)
-            return el.get_attribute("outerHTML")
-        except Exception:
-            return None
-
-    snippets: dict[str, str] = {}
-    candidates = {
-        "login_button": (By.CSS_SELECTOR, "a.bt-login"),
-        "login_form": (By.CSS_SELECTOR, "form[name='memberLogin']"),
-        "id_input": (By.CSS_SELECTOR, "form[name='memberLogin'] input[name='user_id']"),
-        "pw_input": (By.CSS_SELECTOR, "form[name='memberLogin'] input[name='password']"),
-        "login_submit": (By.CSS_SELECTOR, "form[name='memberLogin'] button.bt-login.bt-submit"),
-        "att_button": (By.CSS_SELECTOR, "button.bt-att"),
-        "list_att": (By.CSS_SELECTOR, "#list-att"),
-    }
-    for k, sel in candidates.items():
-        html = outer_html(sel)
-        if html:
-            snippets[k] = html
-    if snippets:
-        _write_text(
-            os.path.join(out_dir, f"dom_{tag}.json"),
-            json.dumps(snippets, ensure_ascii=False, indent=2),
-        )
-
-
-def _wait(driver: webdriver.Chrome, seconds: int | None = None) -> WebDriverWait:
-    return WebDriverWait(driver, seconds or int(os.getenv("WAIT_TIMEOUT", "20")))
-
-
-def login(driver: webdriver.Chrome, base_url: str) -> None:
-    driver.get(base_url)
-    _dump_debug(driver, "01_open")
-
-    # Click header login button to make modal visible.
-    try:
-        btn = _wait(driver).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.bt-login")))
-        btn.click()
-    except TimeoutException:
-        # Modal exists in DOM, so proceed anyway.
-        pass
-
-    # Wait inputs visible
-    id_input = _wait(driver).until(
-        EC.visibility_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin'] input[name='user_id']"))
-    )
-    pw_input = _wait(driver).until(
-        EC.visibility_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin'] input[name='password']"))
-    )
-    id_input.clear()
-    id_input.send_keys(os.environ["EVERGREEN_ID"])
-    pw_input.clear()
-    pw_input.send_keys(os.environ["EVERGREEN_PW"])
-
-    _dump_debug(driver, "02_filled")
-
-    submit = _wait(driver).until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, "form[name='memberLogin'] button.bt-login.bt-submit"))
-    )
-    submit.click()
-
-    # login success heuristic: header shows logout OR cookie-auth keeps the form hidden
-    _wait(driver, int(os.getenv("LOGIN_POST_WAIT", "25"))).until(
-        lambda d: "로그아웃" in d.page_source or "memberLogin" not in d.page_source
-    )
-    _dump_debug(driver, "03_logged_in")
-
-
-def _today_kst_day() -> int:
-    return _now_kst().day
-
-
-def _extract_points_from_today_block(list_att_html: str, day: int) -> int | None:
-    # Try to locate "{day}일" block then extract +NN.
-    # This is best-effort and tolerant to markup changes.
-    m = re.search(rf">\s*{day}\s*일\s*<.*?class=\"lau-point.*?\".*?\+(\d+)", list_att_html, re.DOTALL)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except Exception:
-        return None
-
-
-def checkin(driver: webdriver.Chrome, attendance_url: str) -> Result:
-    driver.get(attendance_url)
-    _dump_debug(driver, "10_attendance_open")
-
-    day = _today_kst_day()
-
-    # Wait list area present (it exists even if empty)
-    list_att = _wait(driver).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#list-att")))
-    list_html = list_att.get_attribute("outerHTML") or ""
-    if f"{day}일" in list_html:
-        pts = _extract_points_from_today_block(list_html, day)
-        return Result(result="already", points=pts, message="오늘 출석 기록이 이미 존재")
-
-    # Click attendance button
-    btn = _wait(driver).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.bt-att")))
-    btn.click()
-    _dump_debug(driver, "11_clicked")
-
-    # Wait until today's record appears
-    def appeared(d: webdriver.Chrome) -> bool:
-        try:
-            el = d.find_element(By.CSS_SELECTOR, "#list-att")
-            return f"{day}일" in (el.get_attribute("outerHTML") or "")
-        except Exception:
-            return False
-
-    _wait(driver, int(os.getenv("CHECKIN_POST_WAIT", "25"))).until(appeared)
-    _dump_debug(driver, "12_checked")
-
-    list_html2 = driver.find_element(By.CSS_SELECTOR, "#list-att").get_attribute("outerHTML") or ""
-    pts = _extract_points_from_today_block(list_html2, day)
-    return Result(result="success", points=pts, message="출석 완료")
-
-
-def persist(result: Result) -> None:
-    ts = _now_kst()
-    payload = {
-        "ts_kst": ts.isoformat(),
-        "result": result.result,
-        "points": result.points,
-        "message": result.message,
-    }
-
-    out_dir = os.getenv("ARTIFACT_DIR", "artifacts")
-    _ensure_dir(out_dir)
-    _write_text(os.path.join(out_dir, "result.json"), json.dumps(payload, ensure_ascii=False, indent=2))
-
-    line = f"{ts.strftime('%Y-%m-%d %H:%M:%S')} KST | {result.result}"
-    if result.points is not None:
-        line += f" | +{result.points}"
-    if result.message:
-        line += f" | {result.message}"
-    line += "\n"
-    _write_text(os.path.join(out_dir, "summary.txt"), line)
-
-    if os.getenv("WRITE_LOG", "1") == "1":
-        _append_text("checkin_log.md", f"- {line}")
-        _update_readme_latest(line.strip())
-
-
-def main() -> int:
-    base_url = os.getenv("EVERGREEN_BASE_URL", "https://evergreenarts.co.kr")
-    attendance_url = os.getenv("EVERGREEN_ATTENDANCE_URL", base_url.rstrip("/") + "/attendance")
-
-    driver = None
-    try:
-        driver = _setup_driver()
-        login(driver, base_url)
-        print("✅ 로그인 성공")
-        res = checkin(driver, attendance_url)
-        if res.result == "already":
-            print("✅ 오늘 출석 기록이 이미 존재함(중복 클릭 안 함)")
-        elif res.result == "success":
-            print("✅ 출석 완료")
-        else:
-            print("❌ 출석 실패")
-        persist(res)
-        print(f"RESULT={res.result}")
-        return 0
-    except TimeoutException as e:
-        if driver:
-            _dump_debug(driver, "99_timeout")
-        persist(Result(result="failed", message=f"TimeoutException: {e}"))
-        print(f"❌ 실패: TimeoutException - {e}")
-        return 1
-    except Exception as e:
-        if driver:
-            _dump_debug(driver, "99_error")
-        persist(Result(result="failed", message=f"{type(e).__name__}: {e}"))
-        print(f"❌ 실패: {type(e).__name__} - {e}")
-        return 1
-    finally:
-        try:
-            if driver:
-                driver.quit()
+            txt = (a.text or "").strip()
+            oc = (a.get_attribute("onclick") or "")
+            if "로그인" in txt or "slPop('sl-login')" in oc or "slPop(\"sl-login\")" in oc:
+                return a
         except Exception:
             pass
+    return None
+
+
+def is_logged_in(driver) -> bool:
+    """
+    '로그인 상태'는 확실한 양성 근거가 있을 때만 True.
+    (로그인 버튼이 보이면 무조건 False)
+    """
+    # 로그인 버튼이 있으면 비로그인
+    if find_login_button(driver) is not None:
+        return False
+
+    src = driver.page_source or ""
+
+    # 페이지 하단에 '로그인이 필요합니다' 뜨면 비로그인
+    if "로그인이 필요합니다" in src:
+        return False
+
+    # 로그인 폼이 보이거나 존재하면 비로그인으로 간주
+    if len(driver.find_elements(By.CSS_SELECTOR, "form[name='memberLogin']")) > 0:
+        return False
+
+    # 로그아웃/마이메뉴 등의 흔한 텍스트가 있으면 로그인으로 간주(사이트마다 다를 수 있음)
+    if ("로그아웃" in src) or ("마이" in src and "내" in src and "메뉴" in src):
+        return True
+
+    # 애매하면 False (여기서 True로 두면 지금처럼 스킵하고 망함)
+    return False
+
+
+def open_login_modal(driver, wait: WebDriverWait, logger: logging.Logger) -> None:
+    btn = find_login_button(driver)
+    if btn is None:
+        # 하단 "로그인" 링크가 따로 있을 수도 있으니 한번 더 시도
+        links = driver.find_elements(By.XPATH, "//a[contains(normalize-space(.), '로그인')]")
+        btn = links[0] if links else None
+
+    if btn is None:
+        raise RuntimeError("로그인 버튼을 찾지 못했습니다")
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    try:
+        btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn)
+
+    # 모달 form 존재 확인
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin']")))
+    logger.info("[LOGIN] modal opened")
+
+
+def do_login(driver, wait: WebDriverWait, logger: logging.Logger, user_id: str, password: str) -> None:
+    form = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin']")))
+
+    id_input = form.find_element(By.CSS_SELECTOR, "input[name='user_id']")
+    pw_input = form.find_element(By.CSS_SELECTOR, "input[name='password']")
+    submit_btn = form.find_element(By.CSS_SELECTOR, "button.bt-login.bt-submit[type='submit']")
+
+    id_input.clear()
+    id_input.send_keys(user_id)
+    pw_input.clear()
+    pw_input.send_keys(password)
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", submit_btn)
+    try:
+        submit_btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", submit_btn)
+
+    # 로그인 완료 대기:
+    # - 로그인 버튼이 없어지거나(헤더에서)
+    # - 또는 "로그인이 필요합니다" 문구가 사라지거나
+    # - 또는 출석 버튼이 나타나거나
+    def _logged_in_condition(d):
+        if find_login_button(d) is not None:
+            return False
+        src = d.page_source or ""
+        if "로그인이 필요합니다" in src:
+            return False
+        # 출석 버튼 후보가 하나라도 생기면 OK
+        if len(d.find_elements(By.CSS_SELECTOR, "button.bt-att")) > 0:
+            return True
+        if "로그아웃" in src:
+            return True
+        return True  # 위 두 조건(로그인 버튼/필요문구)만 통과하면 일단 로그인 성공으로 처리
+
+    wait.until(_logged_in_condition)
+    logger.info("✅ 로그인 성공")
+
+
+def ensure_login(driver, wait: WebDriverWait, logger: logging.Logger, user_id: str, password: str) -> None:
+    if is_logged_in(driver):
+        logger.info("ℹ️ 이미 로그인 상태(확인됨)")
+        return
+
+    logger.info("[LOGIN] need login")
+    open_login_modal(driver, wait, logger)
+    do_login(driver, wait, logger, user_id, password)
+
+    # 로그인 후 출석 페이지로 다시 정착(리다이렉트/모달 닫힘 등 변수가 있음)
+    safe_get(driver, logger, ATTENDANCE_URL)
+    wait.until(lambda d: "출석부" in (d.page_source or ""))
+
+
+# ----------------------------
+# attendance flow
+# ----------------------------
+def is_today_in_att_list(driver) -> bool:
+    today = kst_today_label()
+    els = driver.find_elements(By.CSS_SELECTOR, "#list-att .lau .lau-my_date")
+    return any(e.text.strip() == today for e in els)
+
+
+def wait_today_in_att_list(driver, timeout: int = 20) -> None:
+    today = kst_today_label()
+    wait = WebDriverWait(driver, timeout)
+    wait.until(
+        lambda d: any(
+            (el.text or "").strip() == today
+            for el in d.find_elements(By.CSS_SELECTOR, "#list-att .lau .lau-my_date")
+        )
+    )
+
+
+def find_attendance_button(driver):
+    # 네가 준 버튼:
+    # <button type="submit" class="slbt slbt--rect bt-att bt-submit" onclick="beCheckWrite(this)">출석</button>
+    # 여러 후보로 잡음
+    selectors = [
+        "button.bt-att.bt-submit",
+        "button.bt-att",
+        "button[onclick*='beCheckWrite']",
+        "button[onclick*=\"beCheckWrite\"]",
+    ]
+    for sel in selectors:
+        els = driver.find_elements(By.CSS_SELECTOR, sel)
+        if els:
+            return els[0]
+
+    # 텍스트로도 시도
+    els = driver.find_elements(By.XPATH, "//button[contains(normalize-space(.), '출석')]")
+    if els:
+        return els[0]
+
+    return None
+
+
+def click_attendance_and_verify(driver, wait: WebDriverWait, logger: logging.Logger) -> str:
+    # 이미 출석이면 커밋/클릭 다 하지 말아야 하니까 여기서 종료
+    if is_today_in_att_list(driver):
+        logger.info("✅ 오늘 출석 기록이 이미 존재함(중복 클릭 안 함)")
+        return "already"
+
+    # 출석 버튼 찾기
+    # 페이지 로딩 안정화(동적 렌더 대비)
+    wait.until(lambda d: "출석부" in (d.page_source or ""))
+
+    btn = find_attendance_button(driver)
+    if btn is None:
+        # 혹시 어떤 탭/영역 클릭 후 버튼이 생기는 경우 대비: 화면 한번 스크롤
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.3)
+        btn = find_attendance_button(driver)
+
+    if btn is None:
+        raise RuntimeError("출석 버튼을 찾지 못했습니다")
+
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn)
+    try:
+        btn.click()
+    except Exception:
+        driver.execute_script("arguments[0].click();", btn)
+
+    logger.info("✅ 출석 버튼 클릭")
+
+    # 성공 판정: #list-att에 오늘 날짜 추가
+    wait_today_in_att_list(driver, timeout=25)
+    logger.info("✅ 출석 성공: 목록(#list-att)에 오늘 날짜가 추가됨")
+    return "done"
+
+
+# ----------------------------
+# main
+# ----------------------------
+def main():
+    logger = setup_logger()
+
+    user_id = os.environ.get("EVERGREEN_ID", "").strip()
+    user_pw = os.environ.get("EVERGREEN_PW", "").strip()
+    if not user_id or not user_pw:
+        logger.error("❌ EVERGREEN_ID / EVERGREEN_PW 환경변수가 비어있음")
+        sys.exit(1)
+
+    headless = os.environ.get("HEADLESS", "0").strip().lower() in ("1", "true", "yes")
+
+    driver = None
+    step = "INIT"
+
+    try:
+        driver = build_driver(headless=headless)
+        wait = WebDriverWait(driver, 25)
+
+        step = "OPEN_ATTENDANCE"
+        safe_get(driver, logger, ATTENDANCE_URL)
+
+        step = "ENSURE_LOGIN"
+        ensure_login(driver, wait, logger, user_id, user_pw)
+
+        step = "DO_ATTENDANCE"
+        result = click_attendance_and_verify(driver, wait, logger)
+
+        logger.info(f"RESULT={result}")
+        # CI에서 쓰기 좋게 stdout에도 한 줄 고정 출력
+        print(f"RESULT={result}")
+        return 0
+
+    except Exception as e:
+        logger.error(f"❌ Exception at step={step} - {type(e).__name__}: {e}", exc_info=True)
+        if driver:
+            save_debug(driver, logger, reason=f"fail_{step}")
+        print("RESULT=failed")
+        return 1
+
+    finally:
+        if driver:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

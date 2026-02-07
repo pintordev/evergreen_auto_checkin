@@ -1,4 +1,9 @@
-HELP.md
-debug/
-### Mac OS ###
+# runtime artifacts
+run_artifacts/
+*.png
+*.html
+*.log
+__pycache__/
+.venv/
 .DS_Store
+logs/

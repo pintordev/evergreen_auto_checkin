@@ -1,3 +1,4 @@
-# Evergreen check-in log
+# Check-in Log
 
-> Format: `YYYY-MM-DD HH:MM:SS KST | result | points(optional)`
+| Time(KST) | Result | Note |
+|---|---|---|

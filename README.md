@@ -1,11 +1,10 @@
-[![Evergreen Auto Checkin](https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml/badge.svg)](https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml)
+# Evergreen 출석 자동화
 
-## Latest
+매일 자동으로 에버그린 출석을 수행합니다.
 
-<!-- CHECKIN_STATUS_START -->
-- (not yet)
-<!-- CHECKIN_STATUS_END -->
+## Latest Check-in
 
-## Log
-
-- Full history: `checkin_log.md`
+- **Time(KST):** -
+- **Result:** -
+- **Attendance URL:** -
+- **Base URL:** -
