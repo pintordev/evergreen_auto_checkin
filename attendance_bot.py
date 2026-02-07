@@ -94,7 +94,7 @@ def save_debug(driver: webdriver.Chrome, logger: logging.Logger, reason: str) ->
 # ----------------------------
 def append_checkin_log(logger: logging.Logger, result: str) -> str:
     """
-    CHECKINLOG.md 에 결과 표(Table) 형식으로 누적 기록 (상세 내용 제외)
+    CHECKINLOG.md 에 결과 표(Table) 형식으로 누적 기록
     """
     log_path = Path("CHECKINLOG.md")
 
@@ -109,12 +109,14 @@ def append_checkin_log(logger: logging.Logger, result: str) -> str:
     else:
         res_str = "❌ 실패"
 
-    # 표의 한 줄 생성 (Note 열에는 트리거 정보만 기록)
     new_line = f"| {ts} | {res_str} | Trigger: {trigger} |\n"
 
-    if not log_path.exists():
-        header = "# Check-in Log\n\n| Time(KST) | Result | Note |\n|---|---|---|\n"
+    # [수정된 부분] 파일이 없거나, 파일 내용이 너무 짧을 때(헤더가 없을 때) 헤더 작성
+    header = "# Check-in Log\n\n| Time(KST) | Result | Note |\n|---|---|---|\n"
+
+    if not log_path.exists() or log_path.stat().st_size < 10:
         log_path.write_text(header, encoding="utf-8")
+        logger.info("[LOG] Created new CHECKINLOG.md with header")
 
     with log_path.open("a", encoding="utf-8") as f:
         f.write(new_line)
