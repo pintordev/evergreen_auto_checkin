@@ -1,0 +1,46 @@
+name: Evergreen Auto Checkin
+
+on:
+  schedule:
+    - cron: "5 15 * * *"  # KST 00:05 (UTC 15:05) 매일 실행
+  workflow_dispatch:
+
+jobs:
+  checkin:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Chromium
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: latest
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run attendance bot
+        env:
+          EVERGREEN_ID: ${{ secrets.EVERGREEN_ID }}
+          EVERGREEN_PW: ${{ secrets.EVERGREEN_PW }}
+        run: |
+          python attendance_bot.py
+
+      # ✅ 아티팩트: 우리가 upload-artifact를 넣어야 “Actions 실행 결과 화면”에 다운로드 버튼이 생김
+      # (실패/성공 상관없이 debug.html/png가 있으면 같이 올라감)
+      - name: Upload debug artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug
+          path: artifacts/
+          if-no-files-found: ignore
