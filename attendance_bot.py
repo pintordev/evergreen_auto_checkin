@@ -60,6 +60,76 @@ def save_debug(driver: webdriver.Chrome, logger: logging.Logger, reason: str) ->
 def kst_today_label() -> str:
     return f"{datetime.datetime.now().day}일"
 
+def kst_date_str() -> str:
+    # KST 기준 날짜 문자열 (YYYY-MM-DD)
+    return datetime.datetime.now().strftime("%Y-%m-%d")
+
+def append_daily_md(logger: logging.Logger, result: str, detail: str = "") -> str:
+    """
+    logs/daily/YYYY-MM-DD.md 에 결과 누적 기록
+    return: 생성/수정된 md 파일 경로(str)
+    """
+    Path("logs/daily").mkdir(parents=True, exist_ok=True)
+    day = kst_date_str()
+    md_path = Path("logs/daily") / f"{day}.md"
+
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"- {ts} | result={result}"
+    if detail:
+        line += f" | {detail}"
+    line += "\n"
+
+    if not md_path.exists():
+        md_path.write_text(f"# Evergreen Attendance Log ({day})\n\n", encoding="utf-8")
+
+    with md_path.open("a", encoding="utf-8") as f:
+        f.write(line)
+
+    logger.info(f"[MD] append daily log -> {md_path}")
+    return str(md_path)
+
+def update_readme_latest(logger: logging.Logger, result: str, url: str) -> None:
+    """
+    README.md에 'Latest Run' 섹션을 최신 1건으로 갱신
+    - 섹션이 없으면 맨 아래에 추가
+    """
+    readme = Path("README.md")
+    ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    block = (
+        "## Latest Run\n"
+        f"- time: {ts}\n"
+        f"- url: {url}\n"
+        f"- result: {result}\n"
+    )
+
+    if not readme.exists():
+        readme.write_text("# evergreen_auto_checkin\n\n" + block + "\n", encoding="utf-8")
+        logger.info("[README] created and wrote Latest Run")
+        return
+
+    text = readme.read_text(encoding="utf-8")
+
+    start = text.find("## Latest Run\n")
+    if start == -1:
+        # 없으면 맨 아래에 추가
+        if not text.endswith("\n"):
+            text += "\n"
+        text += "\n" + block + "\n"
+        readme.write_text(text, encoding="utf-8")
+        logger.info("[README] appended Latest Run section")
+        return
+
+    # 섹션 끝(다음 ## 헤더 전까지) 찾아서 통째로 교체
+    # 단순 구현: "## Latest Run" 다음에 나오는 "## " 위치를 섹션 끝으로 간주
+    end = text.find("\n## ", start + 1)
+    if end == -1:
+        new_text = text[:start] + block + "\n"
+    else:
+        new_text = text[:start] + block + text[end+1:]  # end가 \n## 로 잡혀서 +1
+
+    readme.write_text(new_text, encoding="utf-8")
+    logger.info("[README] updated Latest Run section")
+
 def build_driver(headless=True):
     opts = webdriver.ChromeOptions()
 
@@ -267,6 +337,10 @@ def main():
         step = "DO_ATTENDANCE"
         result = click_attendance_and_verify(driver, wait, logger)
 
+        # ✅ 추가: md 로그 누적 + README 최신 갱신
+        append_daily_md(logger, result=result, detail=f"url={ATTENDANCE_URL}")
+        update_readme_latest(logger, result=result, url=ATTENDANCE_URL)
+
         logger.info(f"FINAL_RESULT={result}")
         print(f"RESULT={result}")
         return 0
@@ -274,6 +348,7 @@ def main():
     except Exception as e:
         logger.error(f"❌ 오류 단계: {step} - {e}")
         if driver:
+            append_daily_md(logger, result="failed", detail=f"step={step} err={type(e).__name__}")
             save_debug(driver, logger, reason=f"fail_{step}")
         print("RESULT=failed")
         return 1
