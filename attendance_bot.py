@@ -36,40 +36,53 @@ def build_driver() -> webdriver.Chrome:
 
 
 def login_if_needed(driver: webdriver.Chrome, user_id: str, password: str) -> None:
+    wait = WebDriverWait(driver, 30)
+
     driver.get(ATTENDANCE_URL)
-    wait = WebDriverWait(driver, 20)
     wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
-    # 로그인 상태면 패스
+    # 이미 로그인 상태면 패스
     if "로그아웃" in driver.page_source:
         return
 
-    # ✅ 너가 준 로그인 트리거(모달 오픈)
-    trigger = wait.until(
-        EC.element_to_be_clickable((By.CSS_SELECTOR, 'a[onclick="slPop(\'sl-login\')"]'))
+    # 1️⃣ 로그인 모달 오픈
+    login_btn = wait.until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, 'a[onclick="slPop(\'sl-login\')"]')
+        )
     )
-    try:
-        trigger.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", trigger)
+    driver.execute_script("arguments[0].click();", login_btn)
 
-    # 모달 input 대기
-    id_input = wait.until(EC.visibility_of_element_located((By.NAME, "user_id")))
-    pw_input = wait.until(EC.visibility_of_element_located((By.NAME, "password")))
+    # 2️⃣ 모달 컨테이너가 활성화될 때까지 대기
+    wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "#sl-login.active"))
+    )
 
-    id_input.clear()
-    id_input.send_keys(user_id)
+    # 3️⃣ ❗ visibility ❌ → presence ⭕
+    id_input = wait.until(
+        EC.presence_of_element_located((By.NAME, "user_id"))
+    )
+    pw_input = wait.until(
+        EC.presence_of_element_located((By.NAME, "password"))
+    )
 
-    pw_input.clear()
-    pw_input.send_keys(password)
+    # JS로 값 주입 (headless에서 더 안정적)
+    driver.execute_script(
+        "arguments[0].value = arguments[1];", id_input, user_id
+    )
+    driver.execute_script(
+        "arguments[0].value = arguments[1];", pw_input, password
+    )
+
     pw_input.send_keys(Keys.ENTER)
 
-    # 로그인 성공 확인
+    # 4️⃣ 로그인 성공 확인
     wait.until(lambda d: "로그아웃" in d.page_source)
 
-    # 출석 페이지로 재진입(안전)
+    # 5️⃣ 출석 페이지 재진입
     driver.get(ATTENDANCE_URL)
     wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
 
 
 def is_already_checked_in_today(driver: webdriver.Chrome) -> bool:
