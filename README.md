@@ -1,2 +1,11 @@
 [![Evergreen Auto Checkin](https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml/badge.svg)](https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml)
-- 2026-02-06 00:43:12 | ✅ 출석 체크 성공
+
+## Latest
+
+<!-- CHECKIN_STATUS_START -->
+- (not yet)
+<!-- CHECKIN_STATUS_END -->
+
+## Log
+
+- Full history: `checkin_log.md`
