@@ -78,17 +78,11 @@ def kst_today_label() -> str:
 
 def build_driver(headless: bool = False) -> webdriver.Chrome:
     opts = ChromeOptions()
-    if headless:
-        opts.add_argument("--headless=new")
 
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--disable-gpu")
-    opts.add_argument("--window-size=1280,900")
-
-    # 자동화 탐지 완화(필수 아님)
+    opts.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    opts.add_argument('--disable-blink-features=AutomationControlled')
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
-    opts.add_experimental_option("useAutomationExtension", False)
+    opts.add_experimental_option('useAutomationExtension', False)
 
     driver = webdriver.Chrome(options=opts)
     driver.set_page_load_timeout(40)
