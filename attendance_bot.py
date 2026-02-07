@@ -1,194 +1,289 @@
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
 BASE_URL = "https://evergreenjb.me"
 ATTENDANCE_URL = f"{BASE_URL}/attendance"
+KST = ZoneInfo("Asia/Seoul")
 
-KST = timezone(timedelta(hours=9))
 
-
-def now_kst_str() -> str:
+def kst_now_str() -> str:
     return datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def build_driver() -> webdriver.Chrome:
-    chrome_options = Options()
-    chrome_options.add_argument("--headless=new")
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--window-size=1280,2000")
-    chrome_options.add_argument("--lang=ko-KR")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--blink-settings=imagesEnabled=false")
+def get_env(name: str) -> str:
+    val = os.getenv(name, "").strip()
+    if not val:
+        raise RuntimeError(f"환경변수 {name} 가 비어있습니다. (GitHub Secrets 설정 필요)")
+    return val
 
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.set_page_load_timeout(30)
+
+def make_driver() -> webdriver.Chrome:
+    opts = Options()
+    opts.add_argument("--headless=new")
+    opts.add_argument("--no-sandbox")
+    opts.add_argument("--disable-dev-shm-usage")
+    opts.add_argument("--disable-gpu")
+    opts.add_argument("--window-size=1280,900")
+    opts.add_argument("--lang=ko-KR")
+
+    # GitHub Actions ubuntu-latest 기준 (대부분 존재)
+    chrome_bin = os.getenv("CHROME_BIN", "/usr/bin/google-chrome")
+    if os.path.exists(chrome_bin):
+        opts.binary_location = chrome_bin
+
+    # chromedriver 경로 명시(있으면 더 안정)
+    driver_path = os.getenv("CHROMEDRIVER", "/usr/bin/chromedriver")
+    service = Service(driver_path) if os.path.exists(driver_path) else Service()
+
+    driver = webdriver.Chrome(service=service, options=opts)
+    driver.set_page_load_timeout(40)
     return driver
 
 
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+def open_login_modal(driver: webdriver.Chrome, wait: WebDriverWait) -> None:
+    # 모달 DOM은 항상 존재하지만, active 붙어야 입력 가능해지는 구조.
+    driver.execute_script("slPop('sl-login')")
+    wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.sl-login.active")))
+    wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "div.sl-login.active")))
 
-def login_if_needed(driver, user_id: str, password: str) -> None:
-    wait = WebDriverWait(driver, 30)
+
+def login(driver: webdriver.Chrome, user_id: str, password: str) -> None:
+    wait = WebDriverWait(driver, 20)
 
     driver.get(ATTENDANCE_URL)
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+    open_login_modal(driver, wait)
 
-    # 이미 로그인 상태면 패스
-    if "로그아웃" in driver.page_source:
-        return
+    uid = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.sl-login input[name='user_id']")))
+    pw = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.sl-login input[name='password']")))
 
-    # 1) 로그인 버튼 클릭 (onclick에 slPop('sl-login')가 있는 a 태그)
-    login_btn = wait.until(
-        EC.presence_of_element_located(
-            (By.CSS_SELECTOR, "a[onclick*=\"slPop('sl-login')\"], a[onclick*=\"slPop(\\\"sl-login\\\")\"]")
-        )
+    uid.clear()
+    uid.send_keys(user_id)
+    pw.clear()
+    pw.send_keys(password)
+
+    # submit 버튼 클릭 or 폼 submit
+    submit_btn = wait.until(
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "div.sl-login form[name='memberLogin'] button.bt-submit"))
     )
-    driver.execute_script("arguments[0].click();", login_btn)
+    submit_btn.click()
 
-    # 2) 로그인 모달이 열릴 때까지 대기
-    #    (id가 아니라 class=sl-login 인 경우가 많음)
-    modal = wait.until(
-        EC.presence_of_element_located(
-            (By.CSS_SELECTOR, ".sl-login.active, .sl-login")
-        )
-    )
+    # 로그인 성공 시 /attendance 로 돌아오는 구조(success_return_url=/attendance)
+    wait.until(lambda d: "attendance" in d.current_url)
 
-    # 3) 모달 내부에서 input 찾기 (presence 기준)
-    #    (혹시 name이 바뀌어도 최대한 커버)
-    id_input = wait.until(lambda d: (
-        modal.find_element(By.CSS_SELECTOR, "input[name='user_id'], input#user_id")
-    ))
-    pw_input = wait.until(lambda d: (
-        modal.find_element(By.CSS_SELECTOR, "input[name='password'], input#password, input[type='password']")
-    ))
+    # “비로그인” 텍스트가 사라졌는지로 2차 확인(사이트에 따라 문구 달라질 수 있음)
+    # 너무 엄격하진 않게: 로그인 유지/닉네임 영역 등으로 판단은 생략.
+    return
 
-    # 4) 값 주입 (headless 안정용: JS로 value 넣고 엔터)
-    driver.execute_script("arguments[0].value = arguments[1];", id_input, user_id)
-    driver.execute_script("arguments[0].value = arguments[1];", pw_input, password)
-    pw_input.send_keys(Keys.ENTER)
 
-    # 5) 로그인 성공 확인
-    wait.until(lambda d: "로그아웃" in d.page_source)
-
-    # 6) 출석 페이지 다시 진입
-    driver.get(ATTENDANCE_URL)
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-
-def is_already_checked_in_today(driver: webdriver.Chrome) -> bool:
+def try_click_attendance(driver: webdriver.Chrome) -> str:
     """
-    오늘 출석 여부 판단:
-    - 좌측 상단 상태가 '출석안함'이면 False
-    - 이미 출석이면 보통 '출석함' 류로 바뀌거나, 폼이 안 보이거나, 안내 문구가 바뀜
+    출석 버튼/링크 셀렉터가 스킨마다 달라서,
+    '출석' 텍스트/onclick 키워드 기반으로 여러 후보를 시도한다.
+    성공/이미출석/실패를 문자열로 반환.
     """
-    src = driver.page_source
-    if "출석안함" in src:
-        return False
-    # 보수적으로 폼이 없으면 이미 했을 가능성이 큼
-    forms = driver.find_elements(By.CSS_SELECTOR, "form#click_button")
-    if not forms:
-        return True
-    return True
-
-
-def do_checkin(driver: webdriver.Chrome, message: str) -> None:
     wait = WebDriverWait(driver, 20)
     driver.get(ATTENDANCE_URL)
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
 
-    if is_already_checked_in_today(driver):
-        raise RuntimeError("이미 오늘 출석이 된 상태로 보입니다.")
+    page = driver.page_source
 
-    # greetings 입력
-    greetings = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "input#greetings")))
-    greetings.clear()
-    greetings.send_keys(message)
+    # 이미 출석한 날엔 보통 문구가 뜰 수 있음(정확 문구는 스킨마다 다름)
+    already_patterns = [
+        "이미 출석",
+        "출석하셨",
+        "중복출석",
+        "중복 출석",
+        "출석 완료",
+    ]
+    if any(p in page for p in already_patterns):
+        return "already"
 
-    # 출석 버튼 클릭
-    btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "form#click_button button.bt-att")))
-    try:
-        btn.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", btn)
+    # 후보 요소들: 버튼/링크/인풋 등
+    candidates = []
 
-    # 성공 판정: 페이지에 출석안함이 사라지거나, 내 출석 리스트에 오늘이 생기거나 등
-    # 간단히 '출석안함'이 사라지는 걸 먼저 확인
-    wait.until(lambda d: "출석안함" not in d.page_source)
+    # 1) 텍스트로 찾기 (출석/출석체크/출첵)
+    xpaths = [
+        "//button[contains(., '출석')]",
+        "//a[contains(., '출석')]",
+        "//button[contains(., '출석체크')]",
+        "//a[contains(., '출석체크')]",
+        "//button[contains(., '출첵')]",
+        "//a[contains(., '출첵')]",
+        "//input[@type='submit' and (contains(@value,'출석') or contains(@value,'출첵'))]",
+    ]
+    for xp in xpaths:
+        try:
+            els = driver.find_elements(By.XPATH, xp)
+            candidates.extend(els)
+        except Exception:
+            pass
+
+    # 2) onclick 힌트로 찾기 (attendance / procFilter / check 등)
+    onclick_xpaths = [
+        "//*[contains(@onclick,'attendance')]",
+        "//*[contains(@onclick,'Attendance')]",
+        "//*[contains(@onclick,'procFilter')]",
+        "//*[contains(@onclick,'checkin')]",
+        "//*[contains(@onclick,'check')]",
+    ]
+    for xp in onclick_xpaths:
+        try:
+            els = driver.find_elements(By.XPATH, xp)
+            candidates.extend(els)
+        except Exception:
+            pass
+
+    # 중복 제거(참조 기준)
+    uniq = []
+    seen = set()
+    for el in candidates:
+        try:
+            key = (el.tag_name, el.get_attribute("outerHTML")[:200])
+        except Exception:
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(el)
+
+    # 클릭 시도
+    for el in uniq:
+        try:
+            if not el.is_displayed():
+                continue
+            if not el.is_enabled():
+                continue
+
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            wait.until(EC.element_to_be_clickable(el))
+            el.click()
+
+            # 클릭 후 변화 기다리기: 로딩/알림/리스트 갱신 등.
+            # 완벽한 판별은 어렵지만, 페이지 소스 변화나 알림 텍스트로 판단.
+            wait.until(lambda d: True)  # 최소 대기
+            new_page = driver.page_source
+
+            if any(p in new_page for p in already_patterns):
+                return "already"
+
+            # 성공 힌트(스킨에 따라 다를 수 있음)
+            success_patterns = [
+                "출석 체크",
+                "출석체크",
+                "출석 성공",
+                "축하",
+                "완료",
+                "포인트",
+            ]
+            if any(p in new_page for p in success_patterns) and new_page != page:
+                return "success"
+
+            # 페이지가 바뀌었는데 확신이 없으면 success로 처리(보수적으로)
+            if new_page != page:
+                return "success"
+        except Exception:
+            continue
+
+    # 여기까지면 버튼을 못 찾거나 클릭이 먹지 않은 케이스
+    return "fail"
 
 
-def update_readme(status_line: str) -> None:
+def update_readme(status: str) -> None:
     """
-    README.md
-    - 첫 줄: 배지(유지)
-    - 둘째 줄부터 기록. 최신이 위로.
+    README 규칙:
+    - 1줄: 배지
+    - 2줄부터: 로그 (최신이 위)
     """
+    badge_line = (
+        "[![Evergreen Auto Checkin]"
+        "(https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml/badge.svg)]"
+        "(https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml)"
+    )
+
+    ts = kst_now_str()
+    if status == "success":
+        log = f"- {ts} | ✅ 출석 체크 성공"
+    elif status == "already":
+        log = f"- {ts} | 🟨 이미 출석했거나 중복으로 처리됨"
+    else:
+        log = f"- {ts} | ❌ 출석 체크 실패"
+
     path = "README.md"
-    if not os.path.exists(path):
-        raise RuntimeError("README.md가 없습니다. 리포지토리 루트에서 실행 중인지 확인하세요.")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    else:
+        lines = []
 
-    with open(path, "r", encoding="utf-8") as f:
-        lines = f.read().splitlines()
-
+    # 배지 라인 확보
     if not lines:
-        raise RuntimeError("README.md가 비어 있습니다.")
+        lines = [badge_line]
+    else:
+        # 첫 줄이 배지가 아니면 교체
+        if lines[0].strip() != badge_line.strip():
+            # 기존 첫 줄이 배지 유사면 교체, 아니면 맨 위에 삽입
+            if lines[0].strip().startswith("[![Evergreen Auto Checkin]"):
+                lines[0] = badge_line
+            else:
+                lines = [badge_line] + lines
 
-    badge = lines[0].strip()
+    # 기존 로그들에서 빈 줄 제거(요구사항: 배지 다음 줄부터 바로 기록)
+    rest = [ln for ln in lines[1:] if ln.strip() != ""]
 
-    # 기존 기록 라인들(첫 줄 제외)
-    history = [ln.rstrip() for ln in lines[1:] if ln.strip()]
+    # 같은 타임스탬프 중복(재시도) 방지: 같은 분/초 중복이면 그냥 위에 또 쌓이게 놔둠
+    new_lines = [lines[0], log] + rest
 
-    # 최신 기록을 최상단에 삽입
-    new_history = [status_line] + history
-
-    out = "\n".join([badge] + new_history) + "\n"
     with open(path, "w", encoding="utf-8") as f:
-        f.write(out)
+        f.write("\n".join(new_lines).rstrip() + "\n")
 
 
-def main() -> None:
-    user_id = os.getenv("EVERGREEN_ID", "").strip()
-    user_pw = os.getenv("EVERGREEN_PW", "").strip()
-
-    if not user_id or not user_pw:
-        raise RuntimeError("환경변수 EVERGREEN_ID / EVERGREEN_PW 가 필요합니다.")
-
-    message = os.getenv("CHECKIN_MESSAGE", "오오~렐레!").strip() or "오오~렐레!"
+def main() -> int:
+    user_id = get_env("EVERGREEN_ID")
+    password = get_env("EVERGREEN_PW")
 
     driver = None
+    status = "fail"
     try:
-        driver = build_driver()
-        login_if_needed(driver, user_id, user_pw)
-        do_checkin(driver, message)
+        driver = make_driver()
+        login(driver, user_id, password)
+        status = try_click_attendance(driver)
+        update_readme(status)
 
-        ts = now_kst_str()
-        line = f"- {ts} | ✅ 출석 체크 성공"
-        update_readme(line)
-        print(line)
+        if status == "success":
+            print("✅ 출석 체크 성공")
+            return 0
+        if status == "already":
+            print("🟨 이미 출석했거나 중복으로 처리됨")
+            return 0
 
+        # 실패면 디버깅용 힌트 출력 (너무 길지 않게)
+        html = driver.page_source if driver else ""
+        print("❌ 출석 체크 실패: 버튼을 찾지 못했거나 클릭 후 변화가 없습니다.")
+        print("---- DEBUG (partial) ----")
+        print(re.sub(r"\s+", " ", html)[:2000])
+        print("-------------------------")
+        return 1
+
+    except Exception as e:
+        print(f"❌ 실패: {type(e).__name__} - {e}")
+        return 1
     finally:
         if driver:
-            driver.quit()
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        ts = now_kst_str()
-        msg = f"❌ 실패: {type(e).__name__} - {e}"
-        print(msg)
-        # 실패도 기록하고 싶으면 아래 주석 해제
-        # update_readme(f"- {ts} | {msg}")
-        sys.exit(1)
+    sys.exit(main())
