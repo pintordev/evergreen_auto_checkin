@@ -43,10 +43,10 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@users.noreply.github.com"
           
-          # 1. CHECKINLOG.md를 포함하여 변경된 모든 마크다운과 로그 추가
-          git add README.md CHECKINLOG.md logs/
+          # -f 옵션을 추가하여 .gitignore에 등록된 logs 폴더도 강제로 포함시킵니다.
+          git add README.md CHECKINLOG.md
+          git add -f logs/ 
           
-          # 변경사항이 있는지 확인
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
