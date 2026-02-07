@@ -1,14 +1,3 @@
-# attendance_bot.py
-# 사용법(로컬):
-# export EVERGREEN_ID="polomolo"
-# export EVERGREEN_PW="atmu7510"
-# python attendance_bot.py
-#
-# (Windows PowerShell)
-#   $env:EVERGREEN_ID="아이디"
-#   $env:EVERGREEN_PW="비번"
-#   python .\attendance_bot.py
-
 import os
 import sys
 import time
@@ -23,9 +12,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
-
 ATTENDANCE_URL = "https://evergreenjb.me/attendance"
-
 
 # ----------------------------
 # logging / debug helpers
@@ -52,7 +39,6 @@ def setup_logger() -> logging.Logger:
     logger.info(f"[LOG] write to {log_path}")
     return logger
 
-
 def save_debug(driver: webdriver.Chrome, logger: logging.Logger, reason: str) -> None:
     Path("debug").mkdir(exist_ok=True)
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -68,24 +54,22 @@ def save_debug(driver: webdriver.Chrome, logger: logging.Logger, reason: str) ->
     except Exception as e:
         logger.error(f"[DEBUG] save failed: {type(e).__name__}: {e}")
 
-
 # ----------------------------
 # core utils
 # ----------------------------
 def kst_today_label() -> str:
     return f"{datetime.datetime.now().day}일"
 
-
 def build_driver(headless=True):
     opts = webdriver.ChromeOptions()
 
-    # 1. 아까 추가한 우회 설정
+    # 1. 봇 감지 우회 설정
     opts.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
     opts.add_argument('--disable-blink-features=AutomationControlled')
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
     opts.add_experimental_option('useAutomationExtension', False)
 
-    # 2. 깃허브 액션 에러 해결을 위한 필수 설정 (추가할 부분)
+    # 2. 리눅스/GitHub Actions 환경 필수 설정
     opts.add_argument('--no-sandbox')
     opts.add_argument('--disable-dev-shm-usage')
     if headless:
@@ -93,75 +77,54 @@ def build_driver(headless=True):
 
     driver = webdriver.Chrome(options=opts)
 
-    # 3. 추가 우회 (선택 사항이지만 권장)
+    # 3. 추가 우회 (navigator.webdriver 속성 제거)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     return driver
-
 
 def page_is_403(driver) -> bool:
     src = (driver.page_source or "").lower()
     title = (driver.title or "").lower()
     return ("403 forbidden" in src) or ("403 forbidden" in title)
 
-
 def safe_get(driver, logger: logging.Logger, url: str) -> None:
     logger.info(f"[GET] {url}")
     driver.get(url)
-    time.sleep(0.3)
+    time.sleep(1) # 페이지 안정화를 위해 대기 시간 소폭 증가
     if page_is_403(driver):
         raise RuntimeError(f"403_forbidden ({url})")
-
 
 # ----------------------------
 # login detection / login flow
 # ----------------------------
 def find_login_button(driver):
-    # 네가 준 버튼:
-    # <a class="bt-login slbt slbt--rect" onclick="slPop('sl-login')">로그인</a>
     cands = driver.find_elements(By.CSS_SELECTOR, "a.bt-login")
     for a in cands:
         try:
             txt = (a.text or "").strip()
             oc = (a.get_attribute("onclick") or "")
-            if "로그인" in txt or "slPop('sl-login')" in oc or "slPop(\"sl-login\")" in oc:
+            if "로그인" in txt or "slPop('sl-login')" in oc:
                 return a
         except Exception:
             pass
     return None
 
-
 def is_logged_in(driver) -> bool:
-    """
-    '로그인 상태'는 확실한 양성 근거가 있을 때만 True.
-    (로그인 버튼이 보이면 무조건 False)
-    """
-    # 로그인 버튼이 있으면 비로그인
     if find_login_button(driver) is not None:
         return False
-
     src = driver.page_source or ""
-
-    # 페이지 하단에 '로그인이 필요합니다' 뜨면 비로그인
     if "로그인이 필요합니다" in src:
         return False
-
-    # 로그인 폼이 보이거나 존재하면 비로그인으로 간주
-    if len(driver.find_elements(By.CSS_SELECTOR, "form[name='memberLogin']")) > 0:
+    # 보안 로그인 페이지인 경우(user_id 필드 존재)도 비로그인으로 간주
+    if len(driver.find_elements(By.ID, "user_id")) > 0:
         return False
-
-    # 로그아웃/마이메뉴 등의 흔한 텍스트가 있으면 로그인으로 간주(사이트마다 다를 수 있음)
-    if ("로그아웃" in src) or ("마이" in src and "내" in src and "메뉴" in src):
+    if ("로그아웃" in src) or ("마이" in src and "메뉴" in src):
         return True
-
-    # 애매하면 False (여기서 True로 두면 지금처럼 스킵하고 망함)
     return False
-
 
 def open_login_modal(driver, wait: WebDriverWait, logger: logging.Logger) -> None:
     btn = find_login_button(driver)
     if btn is None:
-        # 하단 "로그인" 링크가 따로 있을 수도 있으니 한번 더 시도
         links = driver.find_elements(By.XPATH, "//a[contains(normalize-space(.), '로그인')]")
         btn = links[0] if links else None
 
@@ -174,49 +137,8 @@ def open_login_modal(driver, wait: WebDriverWait, logger: logging.Logger) -> Non
     except Exception:
         driver.execute_script("arguments[0].click();", btn)
 
-    # 모달 form 존재 확인
     wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin']")))
     logger.info("[LOGIN] modal opened")
-
-
-def do_login(driver, wait: WebDriverWait, logger: logging.Logger, user_id: str, password: str) -> None:
-    form = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin']")))
-
-    id_input = form.find_element(By.CSS_SELECTOR, "input[name='user_id']")
-    pw_input = form.find_element(By.CSS_SELECTOR, "input[name='password']")
-    submit_btn = form.find_element(By.CSS_SELECTOR, "button.bt-login.bt-submit[type='submit']")
-
-    id_input.clear()
-    id_input.send_keys(user_id)
-    pw_input.clear()
-    pw_input.send_keys(password)
-
-    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", submit_btn)
-    try:
-        submit_btn.click()
-    except Exception:
-        driver.execute_script("arguments[0].click();", submit_btn)
-
-    # 로그인 완료 대기:
-    # - 로그인 버튼이 없어지거나(헤더에서)
-    # - 또는 "로그인이 필요합니다" 문구가 사라지거나
-    # - 또는 출석 버튼이 나타나거나
-    def _logged_in_condition(d):
-        if find_login_button(d) is not None:
-            return False
-        src = d.page_source or ""
-        if "로그인이 필요합니다" in src:
-            return False
-        # 출석 버튼 후보가 하나라도 생기면 OK
-        if len(d.find_elements(By.CSS_SELECTOR, "button.bt-att")) > 0:
-            return True
-        if "로그아웃" in src:
-            return True
-        return True  # 위 두 조건(로그인 버튼/필요문구)만 통과하면 일단 로그인 성공으로 처리
-
-    wait.until(_logged_in_condition)
-    logger.info("✅ 로그인 성공")
-
 
 def ensure_login(driver, wait: WebDriverWait, logger: logging.Logger, user_id: str, password: str) -> None:
     if is_logged_in(driver):
@@ -224,13 +146,40 @@ def ensure_login(driver, wait: WebDriverWait, logger: logging.Logger, user_id: s
         return
 
     logger.info("[LOGIN] need login")
-    open_login_modal(driver, wait, logger)
-    do_login(driver, wait, logger, user_id, password)
+    
+    # [수정] 보안 로그인 페이지(전체 화면 로그인)인지 확인
+    direct_id_input = driver.find_elements(By.ID, "user_id")
+    
+    if direct_id_input:
+        logger.info("[LOGIN] 보안 로그인 페이지 감지 - 직접 입력 시도")
+        id_field = direct_id_input[0]
+        pw_field = driver.find_element(By.ID, "password")
+        submit_btn = driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
+        
+        id_field.clear()
+        id_field.send_keys(user_id)
+        pw_field.clear()
+        pw_field.send_keys(password)
+        submit_btn.click()
+    else:
+        # 기존 모달 방식
+        open_login_modal(driver, wait, logger)
+        form = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "form[name='memberLogin']")))
+        id_input = form.find_element(By.CSS_SELECTOR, "input[name='user_id']")
+        pw_input = form.find_element(By.CSS_SELECTOR, "input[name='password']")
+        submit_btn = form.find_element(By.CSS_SELECTOR, "button.bt-login.bt-submit[type='submit']")
+        
+        id_input.clear()
+        id_input.send_keys(user_id)
+        pw_input.clear()
+        pw_input.send_keys(password)
+        submit_btn.click()
 
-    # 로그인 후 출석 페이지로 다시 정착(리다이렉트/모달 닫힘 등 변수가 있음)
+    # 로그인 성공 여부 확인 대기
+    time.sleep(2)
     safe_get(driver, logger, ATTENDANCE_URL)
-    wait.until(lambda d: "출석부" in (d.page_source or ""))
-
+    wait.until(lambda d: "출석부" in (d.page_source or "") or "로그아웃" in (d.page_source or ""))
+    logger.info("✅ 로그인 프로세스 완료")
 
 # ----------------------------
 # attendance flow
@@ -239,7 +188,6 @@ def is_today_in_att_list(driver) -> bool:
     today = kst_today_label()
     els = driver.find_elements(By.CSS_SELECTOR, "#list-att .lau .lau-my_date")
     return any(e.text.strip() == today for e in els)
-
 
 def wait_today_in_att_list(driver, timeout: int = 20) -> None:
     today = kst_today_label()
@@ -251,45 +199,30 @@ def wait_today_in_att_list(driver, timeout: int = 20) -> None:
         )
     )
 
-
 def find_attendance_button(driver):
-    # 네가 준 버튼:
-    # <button type="submit" class="slbt slbt--rect bt-att bt-submit" onclick="beCheckWrite(this)">출석</button>
-    # 여러 후보로 잡음
     selectors = [
         "button.bt-att.bt-submit",
         "button.bt-att",
         "button[onclick*='beCheckWrite']",
-        "button[onclick*=\"beCheckWrite\"]",
     ]
     for sel in selectors:
         els = driver.find_elements(By.CSS_SELECTOR, sel)
         if els:
             return els[0]
-
-    # 텍스트로도 시도
     els = driver.find_elements(By.XPATH, "//button[contains(normalize-space(.), '출석')]")
-    if els:
-        return els[0]
-
-    return None
-
+    return els[0] if els else None
 
 def click_attendance_and_verify(driver, wait: WebDriverWait, logger: logging.Logger) -> str:
-    # 이미 출석이면 커밋/클릭 다 하지 말아야 하니까 여기서 종료
     if is_today_in_att_list(driver):
-        logger.info("✅ 오늘 출석 기록이 이미 존재함(중복 클릭 안 함)")
+        logger.info("✅ 오늘 출석 기록이 이미 존재함")
         return "already"
 
-    # 출석 버튼 찾기
-    # 페이지 로딩 안정화(동적 렌더 대비)
     wait.until(lambda d: "출석부" in (d.page_source or ""))
-
     btn = find_attendance_button(driver)
+    
     if btn is None:
-        # 혹시 어떤 탭/영역 클릭 후 버튼이 생기는 경우 대비: 화면 한번 스크롤
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(0.3)
+        time.sleep(0.5)
         btn = find_attendance_button(driver)
 
     if btn is None:
@@ -301,28 +234,23 @@ def click_attendance_and_verify(driver, wait: WebDriverWait, logger: logging.Log
     except Exception:
         driver.execute_script("arguments[0].click();", btn)
 
-    logger.info("✅ 출석 버튼 클릭")
-
-    # 성공 판정: #list-att에 오늘 날짜 추가
+    logger.info("✅ 출석 버튼 클릭 완료")
     wait_today_in_att_list(driver, timeout=25)
-    logger.info("✅ 출석 성공: 목록(#list-att)에 오늘 날짜가 추가됨")
     return "done"
-
 
 # ----------------------------
 # main
 # ----------------------------
 def main():
     logger = setup_logger()
-
     user_id = os.environ.get("EVERGREEN_ID", "").strip()
     user_pw = os.environ.get("EVERGREEN_PW", "").strip()
+    
     if not user_id or not user_pw:
-        logger.error("❌ EVERGREEN_ID / EVERGREEN_PW 환경변수가 비어있음")
-        sys.exit(1)
+        logger.error("❌ 환경변수(EVERGREEN_ID/PW) 설정 확인 필요")
+        return 1
 
-    headless = os.environ.get("HEADLESS", "0").strip().lower() in ("1", "true", "yes")
-
+    headless = os.environ.get("HEADLESS", "1").strip().lower() in ("1", "true", "yes")
     driver = None
     step = "INIT"
 
@@ -339,25 +267,19 @@ def main():
         step = "DO_ATTENDANCE"
         result = click_attendance_and_verify(driver, wait, logger)
 
-        logger.info(f"RESULT={result}")
-        # CI에서 쓰기 좋게 stdout에도 한 줄 고정 출력
+        logger.info(f"FINAL_RESULT={result}")
         print(f"RESULT={result}")
         return 0
 
     except Exception as e:
-        logger.error(f"❌ Exception at step={step} - {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"❌ 오류 단계: {step} - {e}")
         if driver:
             save_debug(driver, logger, reason=f"fail_{step}")
         print("RESULT=failed")
         return 1
-
     finally:
         if driver:
-            try:
-                driver.quit()
-            except Exception:
-                pass
-
+            driver.quit()
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
