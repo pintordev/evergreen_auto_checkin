@@ -35,7 +35,12 @@ def build_driver() -> webdriver.Chrome:
     return driver
 
 
-def login_if_needed(driver: webdriver.Chrome, user_id: str, password: str) -> None:
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+def login_if_needed(driver, user_id: str, password: str) -> None:
     wait = WebDriverWait(driver, 30)
 
     driver.get(ATTENDANCE_URL)
@@ -45,45 +50,42 @@ def login_if_needed(driver: webdriver.Chrome, user_id: str, password: str) -> No
     if "로그아웃" in driver.page_source:
         return
 
-    # 1️⃣ 로그인 모달 오픈
+    # 1) 로그인 버튼 클릭 (onclick에 slPop('sl-login')가 있는 a 태그)
     login_btn = wait.until(
         EC.presence_of_element_located(
-            (By.CSS_SELECTOR, 'a[onclick="slPop(\'sl-login\')"]')
+            (By.CSS_SELECTOR, "a[onclick*=\"slPop('sl-login')\"], a[onclick*=\"slPop(\\\"sl-login\\\")\"]")
         )
     )
     driver.execute_script("arguments[0].click();", login_btn)
 
-    # 2️⃣ 모달 컨테이너가 활성화될 때까지 대기
-    wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "#sl-login.active"))
+    # 2) 로그인 모달이 열릴 때까지 대기
+    #    (id가 아니라 class=sl-login 인 경우가 많음)
+    modal = wait.until(
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, ".sl-login.active, .sl-login")
+        )
     )
 
-    # 3️⃣ ❗ visibility ❌ → presence ⭕
-    id_input = wait.until(
-        EC.presence_of_element_located((By.NAME, "user_id"))
-    )
-    pw_input = wait.until(
-        EC.presence_of_element_located((By.NAME, "password"))
-    )
+    # 3) 모달 내부에서 input 찾기 (presence 기준)
+    #    (혹시 name이 바뀌어도 최대한 커버)
+    id_input = wait.until(lambda d: (
+        modal.find_element(By.CSS_SELECTOR, "input[name='user_id'], input#user_id")
+    ))
+    pw_input = wait.until(lambda d: (
+        modal.find_element(By.CSS_SELECTOR, "input[name='password'], input#password, input[type='password']")
+    ))
 
-    # JS로 값 주입 (headless에서 더 안정적)
-    driver.execute_script(
-        "arguments[0].value = arguments[1];", id_input, user_id
-    )
-    driver.execute_script(
-        "arguments[0].value = arguments[1];", pw_input, password
-    )
-
+    # 4) 값 주입 (headless 안정용: JS로 value 넣고 엔터)
+    driver.execute_script("arguments[0].value = arguments[1];", id_input, user_id)
+    driver.execute_script("arguments[0].value = arguments[1];", pw_input, password)
     pw_input.send_keys(Keys.ENTER)
 
-    # 4️⃣ 로그인 성공 확인
+    # 5) 로그인 성공 확인
     wait.until(lambda d: "로그아웃" in d.page_source)
 
-    # 5️⃣ 출석 페이지 재진입
+    # 6) 출석 페이지 다시 진입
     driver.get(ATTENDANCE_URL)
     wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-
-
 
 def is_already_checked_in_today(driver: webdriver.Chrome) -> bool:
     """
