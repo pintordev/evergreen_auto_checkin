@@ -95,81 +95,44 @@ def build_driver() -> webdriver.Chrome:
 
 
 def login_if_needed(driver: webdriver.Chrome, user_id: str, user_pw: str) -> None:
-    """
-    로그인 폼 경로/필드명은 사이트 설정에 따라 다를 수 있어서
-    가장 흔한 Rhymix/XE 계열 폼을 '시도'하는 방식으로 작성함.
-    이미 로그인 상태면 그대로 통과.
-    """
     driver.get(ATTENDANCE_URL)
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
 
-    page = driver.page_source
-    if "로그아웃" in page:
-        return  # already logged in
+    # 이미 로그인 상태면 패스
+    if "로그아웃" in driver.page_source:
+        return
 
-    # 로그인 페이지로 이동 시도 (여러 경로 중 하나가 통하길 기대)
-    candidate_urls = [
-        f"{BASE_URL}/index.php?act=dispMemberLoginForm",
-        f"{BASE_URL}/index.php?mid=attendance&act=dispMemberLoginForm",
-        f"{BASE_URL}/member/login",
-        f"{BASE_URL}/index.php?mid=member&act=dispMemberLoginForm",
-    ]
-    for u in candidate_urls:
-        driver.get(u)
-        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-        if "로그인" in driver.page_source:
-            break
+    # ✅ Rhymix/XE 로그인 페이지 (확정)
+    login_url = f"{BASE_URL}/index.php?act=dispMemberLoginForm"
+    driver.get(login_url)
 
-    # 흔한 로그인 input name/id 후보들을 순차 시도
-    id_candidates = [
-        (By.NAME, "user_id"),
-        (By.NAME, "email_address"),
-        (By.ID, "user_id"),
-        (By.ID, "email_address"),
-        (By.NAME, "userid"),
-        (By.ID, "userid"),
-    ]
-    pw_candidates = [
-        (By.NAME, "password"),
-        (By.ID, "password"),
-        (By.NAME, "user_password"),
-        (By.ID, "user_password"),
-    ]
+    # ✅ 실제 존재하는 input이 나올 때까지 기다림
+    id_input = WebDriverWait(driver, 15).until(
+        EC.presence_of_element_located((By.NAME, "user_id"))
+    )
+    pw_input = WebDriverWait(driver, 15).until(
+        EC.presence_of_element_located((By.NAME, "password"))
+    )
 
-    id_el = None
-    pw_el = None
+    id_input.clear()
+    id_input.send_keys(user_id)
 
-    for how, what in id_candidates:
-        try:
-            id_el = driver.find_element(how, what)
-            if id_el:
-                break
-        except Exception:
-            pass
+    pw_input.clear()
+    pw_input.send_keys(user_pw)
+    pw_input.send_keys(Keys.ENTER)
 
-    for how, what in pw_candidates:
-        try:
-            pw_el = driver.find_element(how, what)
-            if pw_el:
-                break
-        except Exception:
-            pass
+    # 로그인 완료 검증
+    WebDriverWait(driver, 15).until(
+        lambda d: "로그아웃" in d.page_source
+    )
 
-    if not id_el or not pw_el:
-        raise RuntimeError("로그인 폼의 ID/PW input을 찾지 못했습니다. (name/id가 다른 듯)")
-
-    id_el.clear()
-    id_el.send_keys(user_id)
-    pw_el.clear()
-    pw_el.send_keys(user_pw)
-    pw_el.send_keys(Keys.ENTER)
-
-    # 로그인 완료 대기: 출석 페이지로 돌아가서 로그아웃이 보이면 OK
+    # 출석 페이지로 이동
     driver.get(ATTENDANCE_URL)
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
-    if "로그아웃" not in driver.page_source:
-        raise RuntimeError("로그인 실패(로그아웃 메뉴가 안 보임). ID/PW 또는 로그인 폼 확인 필요")
-
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
 
 def do_attendance(driver: webdriver.Chrome, greetings: str) -> str:
     driver.get(ATTENDANCE_URL)
