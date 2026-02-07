@@ -3,7 +3,7 @@ name: evergreen-checkin
 on:
   workflow_dispatch:
   schedule:
-    - cron: "5 15 * * *" # 매일 00:05 KST (UTC 15:05 이전 날)
+    - cron: "5 15 * * *" # 00:05 KST
 
 permissions:
   contents: write
@@ -13,22 +13,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Setup Chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: latest
+      - uses: browser-actions/setup-chrome@v1
 
       - name: Install deps
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run bot
@@ -37,37 +31,31 @@ jobs:
           EVERGREEN_ID: ${{ secrets.EVERGREEN_ID }}
           EVERGREEN_PW: ${{ secrets.EVERGREEN_PW }}
           HEADLESS: "1"
+          RUN_TRIGGER: ${{ github.event_name }}
         run: |
-          set -e
           python attendance_bot.py | tee bot_output.txt
-          # RESULT=... 추출해서 output으로 넘김
           RESULT_LINE=$(grep -E '^RESULT=' bot_output.txt | tail -n 1 || true)
           echo "result=${RESULT_LINE#RESULT=}" >> $GITHUB_OUTPUT
 
-      - name: Update README (latest only)
-        if: steps.runbot.outputs.result == 'done' || steps.runbot.outputs.result == 'already'
-        run: |
-          KST=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M:%S KST')
-          echo "Last check-in: ${KST} (${{
-            steps.runbot.outputs.result
-          }})" > README.md
-
-      - name: Commit & push (only when changed AND not already)
-        if: steps.runbot.outputs.result == 'done'
+      - name: Commit records
+        if: steps.runbot.outputs.result != ''
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@users.noreply.github.com"
-
-          if git diff --quiet; then
+          
+          # 1. CHECKINLOG.md를 포함하여 변경된 모든 마크다운과 로그 추가
+          git add README.md CHECKINLOG.md logs/
+          
+          # 변경사항이 있는지 확인
+          if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-
-          git add README.md
-          git commit -m "📝 update last check-in"
+          
+          git commit -m "📝 record check-in (${{ steps.runbot.outputs.result }})"
           git push
 
-      - name: Upload artifacts (logs/debug)
+      - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
