@@ -5,7 +5,6 @@ import datetime
 import logging
 import requests
 
-from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
