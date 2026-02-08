@@ -3,6 +3,9 @@ import sys
 import time
 import datetime
 import logging
+import requests
+
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from urllib.parse import urlparse
@@ -166,7 +169,17 @@ def update_readme_latest(logger: logging.Logger, result: str, attendance_url: st
     else:
         new_text = text[:start] + new_section + text[end:]
 
+    # 1. README 파일 쓰기 완료
     readme.write_text(new_text, encoding="utf-8")
+
+    # 2. 디스코드 알림 추가 (전달받은 인자 그대로 활용)
+    send_discord_notification(
+        result=result,
+        attendance_url=attendance_url,
+        ts=ts,
+        trigger=trigger
+    )
+
     logger.info("[README] Latest Check-in updated.")
 
 # ----------------------------
@@ -361,6 +374,47 @@ def click_attendance_and_verify(driver, wait: WebDriverWait, logger: logging.Log
     wait_today_in_att_list(driver, timeout=25)
     return "done"
 
+# ----------------------------
+# Discord notification
+# ----------------------------
+def send_discord_notification(result: str, attendance_url: str, ts: str, trigger: str):
+    """
+    README에 기록된 정보를 바탕으로 디스코드 알림 전송
+    """
+    webhook_url = os.environ.get('DISCORD_WEBHOOK_URL')
+    if not webhook_url:
+        return
+
+    # 결과에 따른 상태 및 색상 결정
+    if result == "done":
+        status_title = "✅ 출석 성공"
+        color = 3066993  # Green
+    elif result == "already":
+        status_title = "🟡 이미 출석함"
+        color = 16776960 # Yellow
+    else:
+        status_title = "❌ 출석 실패"
+        color = 15158332 # Red
+
+    # 디스코드 Embed 페이로드 구성
+    payload = {
+        "embeds": [{
+            "title": f"🌲 Evergreen Auto Check-in: {status_title}",
+            "color": color,
+            "fields": [
+                {"name": "⏰ Time(KST)", "value": ts, "inline": True},
+                {"name": "🚀 Trigger", "value": trigger, "inline": True},
+                {"name": "🔗 Attendance URL", "value": f"[바로가기]({attendance_url})", "inline": False},
+                {"name": "📍 Base URL", "value": attendance_url.split('/')[2], "inline": False}
+            ],
+            "footer": {"text": "Github Actions Bot"}
+        }]
+    }
+
+    try:
+        requests.post(webhook_url, json=payload, timeout=10)
+    except Exception as e:
+        print(f"디스코드 전송 실패: {e}")
 
 # ----------------------------
 # main

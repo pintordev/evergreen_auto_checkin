@@ -30,7 +30,8 @@ jobs:
         env:
           EVERGREEN_ID: ${{ secrets.EVERGREEN_ID }}
           EVERGREEN_PW: ${{ secrets.EVERGREEN_PW }}
-          HEADLESS: "1"
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          HEADLESS: ${{ secrets.HEADLESS }}
           RUN_TRIGGER: ${{ github.event_name }}
         run: |
           python attendance_bot.py | tee bot_output.txt
