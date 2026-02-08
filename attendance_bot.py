@@ -402,9 +402,7 @@ def send_discord_notification(result: str, attendance_url: str, ts: str, trigger
             "color": color,
             "fields": [
                 {"name": "⏰ Time(KST)", "value": ts, "inline": True},
-                {"name": "🚀 Trigger", "value": trigger, "inline": True},
-                {"name": "🔗 Attendance URL", "value": f"[바로가기]({attendance_url})", "inline": False},
-                {"name": "📍 Base URL", "value": attendance_url.split('/')[2], "inline": False}
+                {"name": "🚀 Trigger", "value": trigger, "inline": True}
             ],
             "footer": {"text": "Github Actions Bot"}
         }]
