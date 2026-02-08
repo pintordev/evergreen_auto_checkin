@@ -24,6 +24,8 @@ jobs:
       - name: Install deps
         run: |
           pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install requests
 
       - name: Run bot
         id: runbot
