@@ -17,3 +17,4 @@
 | 2026-02-17 00:52:26 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-02-18 01:02:13 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-02-19 00:26:24 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-02-20 00:24:38 | ✅ 출석 성공 | Trigger: schedule |
