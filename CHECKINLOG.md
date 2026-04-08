@@ -65,3 +65,4 @@
 | 2026-04-06 00:16:57 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-04-07 00:25:11 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-04-08 00:39:22 | ❌ 실패 | Trigger: schedule |
+| 2026-04-09 00:39:41 | ❌ 실패 | Trigger: schedule |
