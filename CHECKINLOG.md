@@ -80,3 +80,4 @@
 | 2026-04-21 00:39:19 | ❌ 실패 | Trigger: schedule |
 | 2026-04-22 00:38:47 | ❌ 실패 | Trigger: schedule |
 | 2026-04-23 00:36:56 | ❌ 실패 | Trigger: schedule |
+| 2026-04-24 00:44:55 | ✅ 출석 성공 | Trigger: schedule |
