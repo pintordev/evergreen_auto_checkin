@@ -87,3 +87,4 @@
 | 2026-04-28 00:43:02 | ❌ 실패 | Trigger: schedule |
 | 2026-04-29 00:56:31 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-04-30 00:48:27 | ❌ 실패 | Trigger: schedule |
+| 2026-05-01 00:42:38 | ✅ 출석 성공 | Trigger: schedule |
