@@ -103,3 +103,4 @@
 | 2026-05-14 00:59:26 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-05-15 00:56:38 | ❌ 실패 | Trigger: schedule |
 | 2026-05-16 00:50:23 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-05-17 00:29:50 | ✅ 출석 성공 | Trigger: schedule |
