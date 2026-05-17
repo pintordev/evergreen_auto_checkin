@@ -1,0 +1,10 @@
+2026-05-17 15:29:52,082 INFO [LOG] write to logs/run_20260518_002952.log
+2026-05-17 15:30:00,409 INFO [GET] https://evergreenjb.me/attendance
+2026-05-17 15:30:03,215 INFO [LOGIN] need login
+2026-05-17 15:30:03,220 INFO [LOGIN] 보안 로그인 페이지 감지 - 직접 입력 시도
+2026-05-17 15:30:09,208 INFO [GET] https://evergreenjb.me/attendance
+2026-05-17 15:30:11,292 INFO ✅ 로그인 프로세스 완료
+2026-05-17 15:30:12,410 INFO ✅ 출석 버튼 클릭 완료
+2026-05-17 15:30:12,508 INFO [LOG] append checkin log to CHECKINLOG.md
+2026-05-17 15:30:12,666 INFO [README] Latest Check-in updated.
+2026-05-17 15:30:12,667 INFO FINAL_RESULT=done
