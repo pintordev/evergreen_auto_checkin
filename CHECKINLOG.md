@@ -120,3 +120,4 @@
 | 2026-05-31 00:34:24 | ❌ 실패 | Trigger: schedule |
 | 2026-06-01 00:36:21 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-06-02 01:59:08 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-06-03 01:39:20 | ✅ 출석 성공 | Trigger: schedule |
