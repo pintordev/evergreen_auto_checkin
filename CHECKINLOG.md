@@ -123,3 +123,4 @@
 | 2026-06-03 01:39:20 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-06-04 01:40:58 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-06-05 01:13:31 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-06-06 01:07:26 | ✅ 출석 성공 | Trigger: schedule |
