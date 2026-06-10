@@ -128,3 +128,4 @@
 | 2026-06-08 00:38:11 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-06-09 01:30:19 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-06-10 01:08:46 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-06-11 01:23:04 | ❌ 실패 | Trigger: schedule |
