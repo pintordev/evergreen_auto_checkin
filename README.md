@@ -1,7 +1,7 @@
 # Evergreen 출석 자동화 [![evergreen-checkin](https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml/badge.svg)](https://github.com/pintordev/evergreen_auto_checkin/actions/workflows/evergreen_checkin.yml)
 
 ## Latest Check-in
-- **Time(KST):** 2026-06-13 01:11:48
+- **Time(KST):** 2026-06-14 00:40:48
 - **Result:** 출석 성공
 - **Attendance URL:** https://evergreenjb.me/attendance
 - **Base URL:** https://evergreenjb.me
