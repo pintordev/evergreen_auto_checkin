@@ -172,3 +172,4 @@
 | 2026-07-22 00:40:16 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-07-23 00:39:50 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-07-24 00:45:32 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-07-25 00:36:59 | ❌ 실패 | Trigger: schedule |
