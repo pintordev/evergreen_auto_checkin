@@ -175,3 +175,4 @@
 | 2026-07-25 00:36:59 | ❌ 실패 | Trigger: schedule |
 | 2026-07-26 00:30:16 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-07-27 00:32:11 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-07-28 00:56:50 | ❌ 실패 | Trigger: schedule |
