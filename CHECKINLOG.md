@@ -210,3 +210,4 @@
 | 2026-08-29 09:00:05 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-08-30 03:20:43 | ✅ 출석 성공 | Trigger: schedule |
 | 2026-08-31 03:33:34 | ✅ 출석 성공 | Trigger: schedule |
+| 2026-09-01 05:46:26 | ✅ 출석 성공 | Trigger: schedule |
