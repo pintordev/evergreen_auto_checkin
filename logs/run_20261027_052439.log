@@ -1,0 +1,38 @@
+2026-10-26 20:24:39,880 INFO [LOG] write to logs/run_20261027_052439.log
+2026-10-26 20:24:41,509 INFO [GET] https://evergreenjb.me/attendance
+2026-10-26 20:24:43,550 INFO [LOGIN] need login
+2026-10-26 20:24:43,557 INFO [LOGIN] 보안 로그인 페이지 감지 - 직접 입력 시도
+2026-10-26 20:24:45,719 INFO [GET] https://evergreenjb.me/attendance
+2026-10-26 20:24:47,280 INFO ✅ 로그인 프로세스 완료
+2026-10-26 20:24:47,482 INFO ✅ 출석 버튼 클릭 완료
+2026-10-26 20:24:48,143 ERROR ❌ 오류 발생: Message: stale element reference: stale element not found
+  (Session info: chrome=155.0.8059.39); For documentation on this error, please visit: https://www.selenium.dev/documentation/webdriver/troubleshooting/errors#staleelementreferenceexception
+Stacktrace:
+#0 0x55838120e1da <unknown>
+#1 0x558380b2d5c9 <unknown>
+#2 0x558380b42475 <unknown>
+#3 0x558380b411b1 <unknown>
+#4 0x558380b352f9 <unknown>
+#5 0x558380b334c3 <unknown>
+#6 0x558380b3711b <unknown>
+#7 0x558380b371c3 <unknown>
+#8 0x558380b80180 <unknown>
+#9 0x558380b78b57 <unknown>
+#10 0x558380bd2d6e <unknown>
+#11 0x558380b772f8 <unknown>
+#12 0x558380b780d1 <unknown>
+#13 0x5583811d0cec <unknown>
+#14 0x5583811cf505 <unknown>
+#15 0x5583811ba3b5 <unknown>
+#16 0x5583811d015a <unknown>
+#17 0x5583811a2939 <unknown>
+#18 0x5583811f8898 <unknown>
+#19 0x5583811f8a35 <unknown>
+#20 0x55838120cb63 <unknown>
+#21 0x7f99f2c9cb84 <unknown>
+#22 0x7f99f2d29ecc <unknown>
+
+2026-10-26 20:24:48,143 INFO [LOG] append checkin log to CHECKINLOG.md
+2026-10-26 20:24:48,470 INFO [README] Latest Check-in updated.
+2026-10-26 20:24:48,533 ERROR [DEBUG] saved: debug/20261027_052448_fail_DO_ATTENDANCE.png
+2026-10-26 20:24:48,533 ERROR [DEBUG] saved: debug/20261027_052448_fail_DO_ATTENDANCE.html
